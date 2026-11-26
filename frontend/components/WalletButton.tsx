@@ -1,6 +1,7 @@
 "use client";
 
 import { useWallet } from "@/hooks/useWallet";
+import { ConnectWallet } from "./ConnectWallet";
 import { NATIVE } from "@/lib/contract";
 import { formatNative, shortHex } from "@/lib/format";
 
@@ -8,16 +9,7 @@ export function WalletButton() {
   const w = useWallet();
 
   if (w.status === "disconnected" || w.status === "connecting") {
-    return (
-      <button
-        type="button"
-        className="btn btn-primary min-h-11"
-        onClick={w.connect}
-        disabled={w.isConnecting || w.status === "connecting"}
-      >
-        {w.isConnecting || w.status === "connecting" ? "Connecting…" : "Connect wallet"}
-      </button>
-    );
+    return <ConnectWallet className="btn btn-primary min-h-11 px-4 sm:px-6" menu />;
   }
 
   if (w.status === "wrongNetwork") {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ConnectWallet } from "@/components/ConnectWallet";
 import { ErrorNote } from "@/components/ErrorNote";
 import { phaseLabel, useContractTx } from "@/hooks/useContractTx";
 import { useGame } from "@/hooks/useGame";
@@ -38,9 +39,7 @@ export function CellarView() {
   if (wallet.status === "disconnected") {
     return (
       <Gate title="Connect a wallet" body="Your tokens, aging barrels and pending pulls show up here.">
-        <button type="button" className="btn btn-primary" onClick={wallet.connect} disabled={wallet.isConnecting}>
-          {wallet.isConnecting ? "Connecting…" : "Connect wallet"}
-        </button>
+        <ConnectWallet className="btn btn-primary" />
       </Gate>
     );
   }

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { parseEventLogs, type Hash } from "viem";
 import { ErrorNote } from "@/components/ErrorNote";
 import { BarrelStock } from "@/components/BarrelStock";
+import { ConnectWallet } from "@/components/ConnectWallet";
 import { RevealCard } from "@/components/RevealCard";
 import { phaseLabel, useContractTx } from "@/hooks/useContractTx";
 import { useGame } from "@/hooks/useGame";
@@ -132,11 +133,9 @@ export function PullPanel() {
             </div>
           ) : wallet.status === "disconnected" || wallet.status === "connecting" ? (
             <div className="flex flex-col gap-3">
-              <button type="button" className="btn btn-primary btn-lg w-full" onClick={wallet.connect} disabled={wallet.isConnecting}>
-                {wallet.isConnecting ? "Connecting…" : "Connect wallet to pull"}
-              </button>
+              <ConnectWallet label="Connect wallet to pull" className="btn btn-primary btn-lg w-full" />
               <p className="text-sm text-muted">
-                MetaMask, Rabby or any browser wallet on {CHAIN.name}. Need test BNB?{" "}
+                Binance Wallet, MetaMask, Rabby or any browser wallet on {CHAIN.name}. Need test BNB?{" "}
                 <a href="https://www.bnbchain.org/en/testnet-faucet">Testnet faucet</a>
               </p>
               {wallet.connectError ? (
