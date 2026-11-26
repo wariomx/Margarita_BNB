@@ -17,11 +17,11 @@ export async function GET(request: Request, ctx: RouteContext<"/metadata/[file]"
   const origin = new URL(request.url).origin;
   return Response.json(
     {
-      name: `Agave Barrel · ${t.name}`,
+      name: `Margarita · ${t.name}`,
       description:
         tier === 4
-          ? "Extra Añejo from the Agave Barrel testnet demo. Can be redeemed for a bottle once delivery is set up."
-          : `${t.name} from the Agave Barrel testnet demo. Age it in Margarita to reach the next tier.`,
+          ? "Extra Añejo from Margarita, an on-chain tequila gacha on BNB Chain. Can be redeemed for a bottle once delivery is set up."
+          : `${t.name} from Margarita, an on-chain tequila gacha on BNB Chain. Age it to reach the next tier.`,
       image: `${origin}/assets/tokens/${tier}.jpg`,
       attributes: [
         { trait_type: "Tier", value: t.name },

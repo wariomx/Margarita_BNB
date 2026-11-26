@@ -1,3 +1,4 @@
+import { MarketPanel } from "@/components/MarketPanel";
 import { OddsTable } from "@/components/OddsTable";
 import { PullPanel } from "@/components/PullPanel";
 
@@ -19,6 +20,8 @@ export default function Home() {
       </header>
 
       <PullPanel />
+
+      <MarketPanel />
 
       <section aria-labelledby="steps-title" className="flex flex-col gap-6">
         <h2 id="steps-title" className="sr-only">

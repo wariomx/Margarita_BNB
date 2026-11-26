@@ -1,5 +1,6 @@
 "use client";
 
+import { PrizeVaultPanel } from "@/components/PrizeVaultPanel";
 import Link from "next/link";
 import { ConnectWallet } from "@/components/ConnectWallet";
 import { ErrorNote } from "@/components/ErrorNote";
@@ -109,6 +110,7 @@ export function CellarView() {
       <RefundBanner amount={a.refundable} />
       <UnclaimedBanner unclaimed={a.unclaimed} />
       <Shelf balances={a.balances} />
+      <PrizeVaultPanel balances={a.balances} />
       <AgingNow agings={a.agings} />
       <WaitingForRoll pending={a.pending} />
       <Reveals reveals={a.reveals} error={a.revealsError} />
