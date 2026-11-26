@@ -5,7 +5,7 @@ Margarita is an on-chain tequila gacha on BNB Chain, backed by a real-world asse
 Open a barrel for 0.001 tBNB. A verifiable random roll picks one of four tiers (Blanco 70%, Reposado 22%, Añejo 7%, Extra Añejo 1%) as an ERC-1155 token. Tokens age up on chain: 3 Blanco, 3 Reposado or 7 Añejo make one of the next tier. Extra Añejo is capped at 100, one per bottle in the barrel, and is the token that redeems for a bottle. Lower tiers can be swapped in the prize vault for tokenized stocks and BNB ecosystem tokens at a live CoinMarketCap price.
 
 - **Live app:** https://frontend-lyart-six-47.vercel.app
-- **Game contract (BSC Testnet, verified):** [`0x69B95045fe06192Fb42fA1e897aFFFe9eC1023f1`](https://testnet.bscscan.com/address/0x69b95045fe06192fb42fa1e897afffe9ec1023f1)
+- **Game contract (BSC Testnet, verified on BscScan):** [`0x69B95045fe06192Fb42fA1e897aFFFe9eC1023f1`](https://testnet.bscscan.com/address/0x69b95045fe06192fb42fa1e897afffe9ec1023f1)
 - **Prize vault (BSC Testnet):** [`0xa1a3F6cd5b5a5d5068E41956f65B1BaF66BFc3E4`](https://testnet.bscscan.com/address/0xa1a3f6cd5b5a5d5068e41956f65b1baf66bfc3e4)
 
 | Folder | |
@@ -30,7 +30,7 @@ Server environment for the frontend (never `NEXT_PUBLIC_`, never committed): `CM
 - **Provably fair pulls.** Each pull requests Chainlink VRF v2.5 on BNB Chain. The roll, the tier range and the reveal transaction are shown, and anyone can check `PullRevealed(player, requestId, tier, roll)` against `rollToTier(roll)`.
 - **A real asset with a hard cap.** 100 Extra Añejo tokens map to 100 bottles of one barrel; the contract enforces the cap.
 - **Real cost, live from CoinMarketCap** (`/open`): the pull price in USD, the expected pulls and USD cost to reach one Extra Añejo with and without aging (24.05 and 100 pulls, checked by a 2M-pull Monte Carlo), and the break-even pull price in BNB for a given bottle value.
-- **Prize vault** (`/cellar`): swap Blanco, Reposado or Añejo (worth $1, $5 and $20) for test tokenized stocks (NVIDIA, Tesla, Apple xStocks) or BNB ecosystem tokens (CAKE). The server reads the token's live USD price from CoinMarketCap, signs an EIP-712 quote valid for 2 minutes, and the vault contract verifies the signature and pays out on chain.
+- **Prize vault** (`/cellar`): swap Blanco, Reposado or Añejo (worth $1, $5 and $20, set by the owner with `setTierUsd`; generous on purpose for the testnet demo, where a pull costs about $0.55) for test tokenized stocks (NVIDIA, Tesla, Apple xStocks) or BNB ecosystem tokens (CAKE). The server reads the token's live USD price from CoinMarketCap, signs an EIP-712 quote valid for 2 minutes, and the vault contract verifies the signature and pays out on chain.
 
 **Data sources and why.**
 - CoinMarketCap Pro API `GET /v3/cryptocurrency/quotes/latest`:
@@ -54,4 +54,4 @@ Server environment for the frontend (never `NEXT_PUBLIC_`, never committed): `CM
 | mAAPLx (test Apple xStock) | `0xf26c1AACb238b4b68B9cf61a97d0303fe2E5b55C` |
 | mCAKE (test CAKE) | `0x2A12232C05466B06d0B0536FdfB10EE575ed3591` |
 
-Tests: 83 passing (`forge test`). The contracts are reviewed with an AI auditor, not a professional audit. Testnet demo only.
+Tests: 83 passing (`forge test`). Margarita was reviewed with an AI auditor; PrizeVault is covered by Foundry tests. Neither is professionally audited. Testnet demo only.

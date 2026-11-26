@@ -28,8 +28,9 @@ export function PrizeVaultPanel({ balances }: { balances: Record<TierId, number>
   const { address } = useConnection();
   const prizes = PRIZES.filter((p) => p.address && p.cmcId);
   const owned = VAULT_TIERS.filter((t) => balances[t] > 0);
-  const [tier, setTier] = useState<TierId>(owned[0] ?? 1);
-  const [amount, setAmount] = useState(1);
+  const [pickedTier, setTier] = useState<TierId>();
+  const tier: TierId = pickedTier && owned.includes(pickedTier as 1 | 2 | 3) ? pickedTier : (owned[0] ?? 1);
+  const [pickedAmount, setAmount] = useState(1);
   const [prizeKey, setPrizeKey] = useState(prizes[0]?.key ?? "");
   const tx = useAnyTx();
   const [done, setDone] = useState<{ payout: string; symbol: string; hash: string }>();
@@ -52,7 +53,7 @@ export function PrizeVaultPanel({ balances }: { balances: Record<TierId, number>
   });
   const quote = useQuery({
     queryKey: ["prize-quote", prizeKey],
-    enabled: Boolean(vault && prizeKey),
+    enabled: Boolean(vault && prizeKey && owned.length > 0),
     refetchInterval: 60_000,
     queryFn: async (): Promise<QuoteResponse> => {
       const r = await fetch(`/api/quote?token=${prizeKey}`, { cache: "no-store" });
@@ -63,9 +64,11 @@ export function PrizeVaultPanel({ balances }: { balances: Record<TierId, number>
 
   if (!vault || prizes.length === 0) return null;
 
+  const max = balances[tier] ?? 0;
+  const amount = Math.max(1, Math.min(max, pickedAmount));
   const valueUsd = tierUsd.data !== undefined ? Number(formatUnits(tierUsd.data as bigint, 18)) * amount : undefined;
   const payout = valueUsd !== undefined && quote.data ? valueUsd / quote.data.priceUsd : undefined;
-  const max = balances[tier] ?? 0;
+
   const prize = prizes.find((p) => p.key === prizeKey);
 
   async function swap() {
