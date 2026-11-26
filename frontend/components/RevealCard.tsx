@@ -42,7 +42,7 @@ export function RevealCard({ reveal, onAnother, still }: { reveal: Reveal; onAno
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={still}
-            alt={`A ${t.name} barrel`}
+            alt={`A ${t.name} bottle`}
             width={140}
             height={150}
             className="h-[150px] w-[140px] bg-paper object-cover shadow-[inset_0_0_0_2px_var(--color-ink)]"
@@ -50,9 +50,9 @@ export function RevealCard({ reveal, onAnother, still }: { reveal: Reveal; onAno
         ) : (
           <Image
             src={POSTER[reveal.tier]}
-            width={560}
-            height={448}
-            alt={`A ${t.name} barrel`}
+            width={448}
+            height={560}
+            alt={`A ${t.name} bottle`}
             className="aspect-[14/15] h-[150px] w-[140px] bg-paper object-cover shadow-[inset_0_0_0_2px_var(--color-ink)]"
           />
         )}

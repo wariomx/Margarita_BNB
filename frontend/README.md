@@ -29,7 +29,7 @@ Reveal a pull with the VRF mock: `cast send <mock> "fulfillRandomWordsWithOverri
 |---|---|
 | `public/home.html` | Landing page at `/` |
 | `app/open`, `app/cellar` | Pull and cellar pages |
-| `app/metadata/[file]`, `app/art/[tier]` | ERC-1155 metadata and token art |
+| `app/metadata/[file]`, `public/assets/tokens` | ERC-1155 metadata and token art (3D bottle renders) |
 | `lib/barrelScene.ts`, `landing/barrelTop.ts` | 3D barrel-top (three.js, `public/assets/barrel/barrel-top.glb`) |
 | `lib/margaritaAbi.ts` | Generated with `npm run abi:sync` from `../smart-contracts/out` |
 

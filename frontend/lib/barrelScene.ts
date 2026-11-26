@@ -14,13 +14,22 @@ export const TIER_WOOD: Record<Tier, { staves: string; head: string; spark: stri
 };
 
 export const LAUNCH_MS = 1100;
-export const REVEAL_MS = 3200;
+export const REVEAL_MS = 4750;
+const BOTTLE_H = 0.7;
+const LIQUID: Record<Tier, string | null> = { 1: "#eef1ec", 2: "#e0a83c", 3: "#b3621a", 4: null };
+export const BOTTLE_URL: Record<Tier, string> = {
+  1: "/assets/barrel/bottle.glb",
+  2: "/assets/barrel/bottle.glb",
+  3: "/assets/barrel/bottle.glb",
+  4: "/assets/barrel/bottle-extra.glb",
+};
 const SPIN_UP = 600;
 const TINT_FROM = 850;
 const TINT_TO = 1250;
 const SLOW_FROM = 1300;
 const LAND = 2350;
-const POP = 2350;
+const BURST = 3050;
+const XA_EXTRA = 700;
 const MAX_SPIN = 26;
 const DRAW_SPIN = 15;
 const PLAY_SPIN = 9;
@@ -199,6 +208,114 @@ export async function createBarrelScene(
   sparks.visible = false;
   scene.add(sparks);
 
+  const bottleGroup = new THREE.Group();
+  bottleGroup.visible = false;
+  scene.add(bottleGroup);
+  const bottleGeos: THREE.BufferGeometry[] = [];
+  const bottleMats: THREE.Material[] = [];
+  const bottleCache = new Map<string, Promise<THREE.Object3D>>();
+  const loadBottle = (tier: Tier) => {
+    const url = BOTTLE_URL[tier];
+    let base = bottleCache.get(url);
+    if (!base) {
+      base = loader.loadAsync(url).then((g) => g.scene);
+      bottleCache.set(url, base);
+    }
+    return base.then((src) => {
+      const obj = src.clone(true);
+      const bb = new THREE.Box3().setFromObject(obj);
+      const sz = bb.getSize(new THREE.Vector3());
+      const c = bb.getCenter(new THREE.Vector3());
+      const k = BOTTLE_H / sz.y;
+      obj.scale.setScalar(k);
+      obj.position.set(-c.x * k, -bb.min.y * k, -c.z * k);
+      const holder = new THREE.Group();
+      holder.add(obj);
+      obj.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        const orig = mesh.material as THREE.MeshStandardMaterial;
+        const glass = new THREE.MeshPhysicalMaterial({
+          map: orig.map,
+          normalMap: orig.normalMap,
+          transmission: 1,
+          roughness: 0.05,
+          metalness: 0,
+          thickness: 0.05,
+          ior: 1.45,
+        });
+        glass.onBeforeCompile = (sh) => {
+          sh.fragmentShader = sh.fragmentShader
+            .replace(
+              "#include <map_fragment>",
+              `#include <map_fragment>
+              float gmx = max(diffuseColor.r, max(diffuseColor.g, diffuseColor.b));
+              float gmn = min(diffuseColor.r, min(diffuseColor.g, diffuseColor.b));
+              float glassMask = smoothstep(0.62, 0.75, gmx) * (1.0 - smoothstep(0.08, 0.16, gmx - gmn));
+              diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), glassMask);`,
+            )
+            .replace(
+              "#include <lights_physical_fragment>",
+              `#include <lights_physical_fragment>
+              material.transmission *= glassMask;`,
+            );
+        };
+        mesh.material = glass;
+        bottleMats.push(glass);
+        bottleGeos.push(mesh.geometry);
+        const liquid = LIQUID[tier];
+        if (!liquid) return;
+        const lb = new THREE.Box3().setFromObject(mesh);
+        const lh = lb.max.y - lb.min.y;
+        const fill = new THREE.MeshPhysicalMaterial({
+          color: liquid,
+          roughness: 0.08,
+          metalness: 0,
+          clearcoat: 1,
+          clearcoatRoughness: 0.05,
+          emissive: liquid,
+          emissiveIntensity: tier === 1 ? 0.05 : 0.18,
+          transparent: tier === 1,
+          opacity: tier === 1 ? 0.35 : 1,
+          clippingPlanes: [new THREE.Plane(new THREE.Vector3(0, -1, 0), 0)],
+        });
+        bottleMats.push(fill);
+        const inner = new THREE.Mesh(mesh.geometry, fill);
+        inner.position.copy(mesh.position);
+        inner.quaternion.copy(mesh.quaternion);
+        inner.scale.copy(mesh.scale).multiplyScalar(0.9);
+        inner.position.y += lh * 0.012;
+        mesh.parent!.add(inner);
+        inner.onBeforeRender = () => {
+          const top = new THREE.Box3().setFromObject(holder);
+          fill.clippingPlanes![0].constant = top.min.y + (top.max.y - top.min.y) * 0.55;
+        };
+      });
+      return holder;
+    });
+  };
+  let bottle: THREE.Object3D | undefined;
+
+  const SHARDS = 18;
+  const shardGeo = new THREE.BoxGeometry(0.035, 0.17, 0.012);
+  const shardMat = new THREE.MeshStandardMaterial({ color: "#d5a865", roughness: 0.7 });
+  const shards: THREE.Mesh[] = [];
+  const shardDir: number[][] = [];
+  for (let i = 0; i < SHARDS; i++) {
+    const m = new THREE.Mesh(shardGeo, shardMat);
+    m.visible = false;
+    scene.add(m);
+    shards.push(m);
+    const a = (i / SHARDS) * Math.PI * 2 + r() * 0.3;
+    shardDir.push([a, 0.3 + r() * 0.35, 0.7 + r() * 0.8, 1.2 + r() * 1.4, r() * 6 - 3]);
+  }
+  renderer.localClippingEnabled = true;
+  const baseExposure = renderer.toneMappingExposure;
+  const crackWhite = new THREE.Color("#fff6e8");
+  let revealTier: Tier = 1;
+  let burstAt = BURST;
+  let revealLen = REVEAL_MS;
+
   const raw = { s: new THREE.Color(RAW.staves) };
   const from = { s: new THREE.Color() };
   const target = { s: new THREE.Color() };
@@ -229,6 +346,15 @@ export async function createBarrelScene(
   function resetLid() {
     glow.intensity = 0;
     sparks.visible = false;
+    for (const sh of shards) sh.visible = false;
+    renderer.toneMappingExposure = baseExposure;
+    for (const m of modelMats) (m as THREE.MeshStandardMaterial).emissiveIntensity = 0;
+  }
+
+  function showBarrel() {
+    spinner.visible = true;
+    bottleGroup.visible = false;
+    shadow.visible = true;
   }
 
   function step(dt: number) {
@@ -327,26 +453,62 @@ export async function createBarrelScene(
     tint.value.copy(raw.s).lerp(target.s, k);
 
     resetLid();
-    if (tt >= POP) {
-      const p = tt - POP;
-      const up = Math.max(0, Math.sin(Math.min(1, p / 520) * Math.PI));
-      y = up * 0.05;
-      if (p < 90) squash = Math.max(squash, 0.06 * (1 - p / 90));
-      glow.intensity = 5 * Math.exp(-p / 420) * (p < 80 ? p / 80 : 1);
+    if (tt >= LAND && tt < burstAt) {
+      const kc = clamp01((tt - LAND) / (burstAt - LAND));
+      const half = revealTier === 4 && tt < LAND + (burstAt - LAND) * 0.55;
+      glow.color.copy(half ? crackWhite : target.s).lerp(new THREE.Color(TIER_WOOD[revealTier].spark), half ? 0 : 0.6);
+      glow.intensity = 9 * kc * kc;
+      for (const m of modelMats) {
+        const sm = m as THREE.MeshStandardMaterial;
+        sm.emissive.copy(glow.color);
+        sm.emissiveIntensity = 0.22 * kc * kc;
+      }
+      y = Math.abs(Math.sin(tt * 0.11)) * 0.012 * kc;
+      angle = slowTarget + Math.sin(tt * 0.17) * 0.05 * kc;
+      tilt = Math.sin(tt * 0.13) * 0.03 * kc;
+    }
+    if (tt >= burstAt) {
+      const p = tt - burstAt;
       const sp = p / 1000;
+      spinner.visible = false;
+      shadow.visible = p < 120;
+      renderer.toneMappingExposure = baseExposure * (1 + 2.2 * Math.exp(-p / 140));
+      glow.intensity = 9 * Math.exp(-p / 380);
+      y = 0;
+      tilt = 0;
+      if (sp < 1.4) {
+        for (let i = 0; i < SHARDS; i++) {
+          const [ang, h0, out, up, spin] = shardDir[i];
+          const sh = shards[i];
+          sh.visible = true;
+          const rad = 0.2 + out * sp;
+          sh.position.set(Math.cos(ang) * rad, h0 + up * sp - 2.6 * sp * sp, Math.sin(ang) * rad);
+          sh.rotation.set(spin * sp, ang, spin * 0.6 * sp);
+          const fade = sp > 1.1 ? 1 - (sp - 1.1) / 0.3 : 1;
+          sh.scale.setScalar(Math.max(0.01, fade));
+        }
+      }
       if (sp < 0.85) {
         sparks.visible = true;
         for (let i = 0; i < N; i++) {
           const d = i * 3;
-          sparkPos[d] = dirs[d] * sp * 0.55;
-          sparkPos[d + 1] = MODEL_H - 0.05 + dirs[d + 1] * sp * 0.7 - 1.4 * sp * sp;
-          sparkPos[d + 2] = dirs[d + 2] * sp * 0.55;
+          sparkPos[d] = dirs[d] * sp * 0.75;
+          sparkPos[d + 1] = 0.45 + dirs[d + 1] * sp * 0.8 - 1.4 * sp * sp;
+          sparkPos[d + 2] = dirs[d + 2] * sp * 0.75;
         }
         sparkGeo.attributes.position.needsUpdate = true;
         sparkMat.opacity = 1 - sp / 0.85;
       }
+      if (bottle) {
+        bottleGroup.visible = true;
+        const grow = clamp01(p / 650);
+        const back = 1 + 2.2 * Math.pow(grow - 1, 3) + 1.2 * Math.pow(grow - 1, 2);
+        bottleGroup.scale.setScalar(Math.max(0.05, back));
+        bottleGroup.position.y = 0.05 * easeOutCubic(p / 1100);
+        bottleGroup.rotation.y = FRONT + 5.2 * (1 - Math.exp(-p / 520)) - 5.2 + 0.25 * (p / 1000);
+      }
     }
-    if (tt >= REVEAL_MS) {
+    if (tt >= revealLen) {
       tilt = 0;
       enter("rest");
       const cb = endCb;
@@ -406,6 +568,20 @@ export async function createBarrelScene(
     tint.value.copy(raw.s);
     glow.color.set(wood.spark);
     sparkMat.color.set(wood.spark);
+    shardMat.color.set(wood.staves);
+    revealTier = tier;
+    burstAt = BURST + (tier === 4 ? XA_EXTRA : 0);
+    revealLen = REVEAL_MS + (tier === 4 ? XA_EXTRA : 0);
+    bottle = undefined;
+    bottleGroup.clear();
+    bottleGroup.visible = false;
+    void loadBottle(tier)
+      .then((b) => {
+        if (revealTier !== tier) return;
+        bottle = b;
+        bottleGroup.add(b);
+      })
+      .catch(() => {});
     endCb = onEnd;
     revealW0 = w;
     revealTilt0 = tilt;
@@ -423,6 +599,7 @@ export async function createBarrelScene(
 
   const api: BarrelScene = {
     launch() {
+      showBarrel();
       tint.value.copy(raw.s);
       woodK = 1;
       angle = FRONT;
@@ -509,6 +686,14 @@ export async function createBarrelScene(
       }
       for (const m of [shadowMat, sparkMat]) m.dispose();
       envTarget.dispose();
+      shardGeo.dispose();
+      shardMat.dispose();
+      for (const g of bottleGeos) g.dispose();
+      for (const m of bottleMats) {
+        const pm = m as THREE.MeshPhysicalMaterial;
+        for (const tx of [pm.map, pm.normalMap]) tx?.dispose();
+        m.dispose();
+      }
       for (const tx of [shadowMap, sparkMap]) tx.dispose();
       renderer.dispose();
       renderer.forceContextLoss();

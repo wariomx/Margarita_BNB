@@ -222,9 +222,9 @@ function ShelfCard({ tier, count }: { tier: TierId; count: number }) {
       <div className="stage flex justify-center px-6 pt-6">
         <Image
           src={POSTER[tier]}
-          width={560}
-          height={448}
-          alt={`${t.name} barrel`}
+          width={448}
+          height={560}
+          alt={`${t.name} bottle`}
           sizes="(min-width: 64rem) 160px, 40vw"
           className={`aspect-[4/5] w-3/5 object-cover ${count === 0 ? "opacity-40" : ""}`}
         />

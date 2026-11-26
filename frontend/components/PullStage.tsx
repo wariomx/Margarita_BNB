@@ -83,10 +83,14 @@ export function PullStage({
     if (revealed.current) return;
     revealed.current = true;
     setPlaying(true);
+    scene.resize(window.innerWidth, window.innerHeight);
     scene.playReveal(tier, () => {
+      const s = sceneRef.current;
+      s?.resize(W, H);
+      const still = s?.snapshot();
       setPlaying(false);
       setFinished(true);
-      onDoneRef.current(sceneRef.current?.snapshot());
+      onDoneRef.current(still);
     });
   }, [status, tier, spinning]);
 
@@ -114,6 +118,13 @@ export function PullStage({
     return () => window.removeEventListener("keydown", onKey);
   }, [canSkip]);
 
+  useEffect(() => {
+    if (!playing) return;
+    const onResize = () => sceneRef.current?.resize(window.innerWidth, window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [playing]);
+
   if (status === "failed") {
     return tier === undefined ? (
       <BarrelArt id="drawing" size={150} label="Your barrel, waiting for the roll" />
@@ -121,22 +132,30 @@ export function PullStage({
   }
 
   return (
-    <div className="flex flex-col items-center" style={{ width: W }}>
+    <div className="flex flex-col items-center" style={{ width: W, minHeight: playing ? H : undefined }}>
+      <div
+        className={playing ? "fixed inset-0 z-50 flex items-center justify-center bg-paper/95 backdrop-blur-sm" : "flex flex-col items-center"}
+      >
       <canvas
         ref={canvasRef}
         width={W}
         height={H}
-        style={{ width: W, height: H }}
+        style={playing ? { width: "100vw", height: "100dvh" } : { width: W, height: H }}
         role="img"
         aria-label={tier !== undefined ? "Your barrel is opening" : spinning ? "Your barrel is spinning while the roll is drawn" : "Your barrel stands still, waiting for the roll"}
         onClick={canSkip ? skip : undefined}
         className={canSkip ? "cursor-pointer" : undefined}
       />
       {canSkip ? (
-        <button type="button" className="btn btn-secondary min-h-[44px] self-end px-4 text-sm" onClick={skip}>
+        <button
+          type="button"
+          className={`btn btn-secondary min-h-[44px] px-4 text-sm ${playing ? "fixed bottom-6 right-6 z-50" : "self-end"}`}
+          onClick={skip}
+        >
           Skip
         </button>
       ) : null}
+      </div>
     </div>
   );
 }

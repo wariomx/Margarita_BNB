@@ -2,10 +2,10 @@ import Image from "next/image";
 import { TIERS, TIER_IDS, type TierId } from "@/lib/contract";
 
 export const POSTER: Record<TierId, string> = {
-  1: "/assets/barrel/posters/blanco.webp",
-  2: "/assets/barrel/posters/reposado.webp",
-  3: "/assets/barrel/posters/anejo.webp",
-  4: "/assets/barrel/posters/extra-anejo.webp",
+  1: "/assets/barrel/bottles/blanco.webp",
+  2: "/assets/barrel/bottles/reposado.webp",
+  3: "/assets/barrel/bottles/anejo.webp",
+  4: "/assets/barrel/bottles/extra-anejo.webp",
 };
 
 export function Lineup({
@@ -32,9 +32,9 @@ export function Lineup({
         <li key={id} className="lineup-item flex min-w-0 flex-col items-center gap-2" data-picked={pick === id ? "" : undefined}>
           <Image
             src={POSTER[id]}
-            width={560}
-            height={448}
-            alt={`${TIERS[id].name} barrel`}
+            width={448}
+            height={560}
+            alt={`${TIERS[id].name} bottle`}
             priority={priority}
             sizes="(min-width: 64rem) 180px, 25vw"
             className="aspect-[4/5] w-full object-cover"
