@@ -4,6 +4,20 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { TierId } from "@/lib/contract";
 import type { BarrelScene } from "@/lib/barrelScene";
 import { BarrelArt } from "./BarrelArt";
+import { isMuted, onMuteChange, play, preload, setMuted, spin, type Cue } from "@/lib/sfx";
+
+function useMuted() {
+  return useSyncExternalStore(
+    (cb) => {
+      const off = onMuteChange(cb);
+      return () => {
+        off();
+      };
+    },
+    isMuted,
+    () => false,
+  );
+}
 
 const W = 280;
 const H = 300;
@@ -52,6 +66,8 @@ export function PullStage({
           return;
         }
         sceneRef.current = scene;
+        void preload();
+        scene.setAudio({ cue: (n) => play(n as Cue), spin });
         scene.launch();
         setStatus("ready");
       })
@@ -90,10 +106,12 @@ export function PullStage({
       const still = s?.snapshot();
       setPlaying(false);
       setFinished(true);
+      play("card");
       onDoneRef.current(still);
     });
   }, [status, tier, spinning]);
 
+  const muted = useMuted();
   const canSkip = tier !== undefined && !finished;
   const skip = () => {
     if (playing) {
@@ -146,6 +164,14 @@ export function PullStage({
         onClick={canSkip ? skip : undefined}
         className={canSkip ? "cursor-pointer" : undefined}
       />
+      <button
+        type="button"
+        className={`btn btn-secondary min-h-[44px] px-3 text-sm ${playing ? "fixed bottom-6 left-6 z-50" : "self-start"}`}
+        aria-pressed={muted}
+        onClick={() => setMuted(!muted)}
+      >
+        {muted ? "Sound off" : "Sound on"}
+      </button>
       {canSkip ? (
         <button
           type="button"

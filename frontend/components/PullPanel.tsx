@@ -1,5 +1,6 @@
 "use client";
 
+import { play, preload, unlock } from "@/lib/sfx";
 import Link from "next/link";
 import { useState } from "react";
 import { parseEventLogs, type Hash } from "viem";
@@ -46,6 +47,8 @@ export function PullPanel() {
   const priceText = price === undefined ? "…" : formatNative(price, NATIVE);
 
   async function pull() {
+    unlock();
+    void preload()?.then(() => play("tap"));
     if (price === undefined) return;
     const receipt = await pullTx.run("pull", [], price);
     if (!receipt) return;

@@ -78,6 +78,8 @@ function sparkTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+export type SceneAudio = { cue(name: string): void; spin(rate: number): void };
+
 export type BarrelScene = {
   launch(): void;
   settle(): void;
@@ -86,6 +88,7 @@ export type BarrelScene = {
   kick(dw: number): void;
   setWood(wood: { staves: string; head: string }, instant?: boolean): void;
   setRunning(on: boolean): void;
+  setAudio(audio: SceneAudio | undefined): void;
   resize(width: number, height: number): void;
   skip(): void;
   snapshot(): string;
@@ -339,6 +342,11 @@ export async function createBarrelScene(
   let queued: { tier: Tier; onEnd: () => void } | undefined;
   let endCb: (() => void) | undefined;
 
+  let audio: SceneAudio | undefined;
+  let muteCues = false;
+  const cue = (name: string) => {
+    if (!muteCues) audio?.cue(name);
+  };
   let raf = 0;
   let running = true;
   let last = 0;
@@ -406,6 +414,10 @@ export async function createBarrelScene(
     } else if (mode === "reveal") {
       revealStep(dt);
     }
+    if (audio) {
+      const spinning = mode === "launch" || mode === "spin" || mode === "settle" || (mode === "reveal" && t < burstAt);
+      audio.spin(spinning && !muteCues ? w / DRAW_SPIN : 0);
+    }
 
     if (mode !== "reveal") {
       if (mode !== "settle" || w > 0) angle += w * dt;
@@ -421,6 +433,11 @@ export async function createBarrelScene(
 
   function revealStep(dt: number) {
     const tt = t;
+    const prev = tt - dt * 1000;
+    const crossed = (at: number) => prev < at && tt >= at;
+    if (crossed(LAND)) cue("creak");
+    if (crossed(burstAt)) cue("burst");
+    if (crossed(burstAt + 220)) cue(`chime${revealTier}`);
     if (tt < SLOW_FROM) {
       w = tt < SPIN_UP ? revealW0 + (MAX_SPIN - revealW0) * easeInOut(tt / SPIN_UP) : MAX_SPIN;
       angle += w * dt;
@@ -583,6 +600,7 @@ export async function createBarrelScene(
       })
       .catch(() => {});
     endCb = onEnd;
+    cue("riser");
     revealW0 = w;
     revealTilt0 = tilt;
     y = 0;
@@ -600,6 +618,7 @@ export async function createBarrelScene(
   const api: BarrelScene = {
     launch() {
       showBarrel();
+      cue("throw");
       tint.value.copy(raw.s);
       woodK = 1;
       angle = FRONT;
@@ -665,14 +684,24 @@ export async function createBarrelScene(
         beginReveal(q.tier, q.onEnd);
       }
       if (mode !== "reveal") return;
+      const reached = t >= burstAt + 220;
+      muteCues = true;
+      audio?.spin(0);
       while (mode === "reveal") step(0.05);
+      muteCues = false;
+      if (!reached) cue(`chime${revealTier}`);
       apply();
+    },
+    setAudio(a) {
+      audio = a;
     },
     snapshot() {
       apply();
       return canvas.toDataURL("image/png");
     },
     dispose() {
+      audio?.spin(0);
+      audio = undefined;
       cancelAnimationFrame(raf);
       raf = 0;
       endCb = undefined;
