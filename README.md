@@ -5,7 +5,7 @@ Margarita is an on-chain tequila gacha on BNB Chain, backed by a real-world asse
 Open a barrel for 0.001 tBNB. A verifiable random roll picks one of four tiers (Blanco 70%, Reposado 22%, Añejo 7%, Extra Añejo 1%) as an ERC-1155 token. Tokens age up on chain: 3 Blanco, 3 Reposado or 7 Añejo make one of the next tier. Extra Añejo is capped at 100, one per bottle in the barrel, and is the token that redeems for a bottle. Lower tiers can be swapped in the prize vault for tokenized stocks and BNB ecosystem tokens at a live CoinMarketCap price.
 
 - **Live app:** https://frontend-lyart-six-47.vercel.app
-- **Game contract (BSC Testnet, verified on BscScan):** [`0x69B95045fe06192Fb42fA1e897aFFFe9eC1023f1`](https://testnet.bscscan.com/address/0x69b95045fe06192fb42fa1e897afffe9ec1023f1)
+- **Game contract (BSC Testnet):** [`0x69B95045fe06192Fb42fA1e897aFFFe9eC1023f1`](https://testnet.bscscan.com/address/0x69b95045fe06192fb42fa1e897afffe9ec1023f1)
 - **Prize vault (BSC Testnet):** [`0xa1a3F6cd5b5a5d5068E41956f65B1BaF66BFc3E4`](https://testnet.bscscan.com/address/0xa1a3f6cd5b5a5d5068e41956f65b1baf66bfc3e4)
 
 | Folder | |
@@ -37,6 +37,7 @@ Server environment for the frontend (never `NEXT_PUBLIC_`, never committed): `CM
   - BNB (id 1839) and CAKE (7186) feed the real-cost panel, served from `/api/market` with a 5-minute CDN cache;
   - NVDAx (36992), TSLAx (37004), AAPLx (36994) and CAKE (7186) price each vault swap in `/api/quote`, signed per request.
   - The key stays on the server; usage is verifiable in the CMC dashboard and in each `Claimed(player, tier, amount, token, priceUsd, payout, nonce)` event on chain.
+  - Live proof: [1 Reposado → 0.03334 mNVDAx at $149.96](https://testnet.bscscan.com/tx/0xf6a968baacd55dcb40fe90438e41a2d6c5a68573953e20776c2caedb082a9682) (block 145025197).
 - Chainlink VRF v2.5 (BSC Testnet coordinator) for the rolls.
 
 **BNB Chain.** Both contracts run on BSC Testnet (chain 97). Reads go through BSC RPC; token metadata is served at `/metadata/{id}.json` and set on chain with `setURI`.
@@ -44,6 +45,8 @@ Server environment for the frontend (never `NEXT_PUBLIC_`, never committed): `CM
 **What's next.** Mainnet with an audited contract; Redeem with shipping for Extra Añejo; real tokenized stocks in the vault instead of test tokens; a second price source (Atlas) checked against CoinMarketCap before signing; more barrels from more distilleries.
 
 ## Contracts
+
+All contracts are verified on BscScan.
 
 | Contract | Address (BSC Testnet) |
 |---|---|
@@ -54,4 +57,4 @@ Server environment for the frontend (never `NEXT_PUBLIC_`, never committed): `CM
 | mAAPLx (test Apple xStock) | `0xf26c1AACb238b4b68B9cf61a97d0303fe2E5b55C` |
 | mCAKE (test CAKE) | `0x2A12232C05466B06d0B0536FdfB10EE575ed3591` |
 
-Tests: 83 passing (`forge test`). Margarita was reviewed with an AI auditor; PrizeVault is covered by Foundry tests. Neither is professionally audited. Testnet demo only.
+Tests: 83 passing (`forge test`). Margarita was reviewed with an AI auditor. PrizeVault had one quick independent manual security review with forge proof-of-concept tests and no formal audit; no critical or high issues were found. Treat both as unaudited hackathon code. Testnet demo only.

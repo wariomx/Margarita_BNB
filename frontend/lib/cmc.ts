@@ -8,11 +8,13 @@ export type Market = {
   cakeChange24h: number | null;
   updatedAt: string | null;
   source: "CoinMarketCap";
+  prices: Record<string, { usd: number | null; change24h: number | null }>;
 };
 
 const ENDPOINT = "https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest";
 const BNB_ID = 1839;
 const CAKE_ID = 7186;
+const STOCK_IDS = [36992, 37004, 36994];
 
 type Json = Record<string, unknown>;
 
@@ -60,6 +62,12 @@ export function parseQuotes(body: unknown): Market {
     cakeChange24h: num(cq?.percent_change_24h),
     updatedAt: str(bq?.last_updated) ?? str(bnb?.last_updated) ?? null,
     source: "CoinMarketCap",
+    prices: Object.fromEntries(
+      [CAKE_ID, ...STOCK_IDS].map((id) => {
+        const q = usdQuote(findAsset(data, id));
+        return [String(id), { usd: num(q?.price), change24h: num(q?.percent_change_24h) }];
+      }),
+    ),
   };
 }
 
@@ -72,7 +80,7 @@ export async function getMarket(): Promise<Market> {
   cacheLife({ stale: 300, revalidate: 300, expire: 900 });
   const key = process.env.CMC_API_KEY;
   if (!key) throw new Error("CoinMarketCap is not configured");
-  const url = `${ENDPOINT}?id=${BNB_ID},${CAKE_ID}&convert=USD`;
+  const url = `${ENDPOINT}?id=${[BNB_ID, CAKE_ID, ...STOCK_IDS].join(",")}&convert=USD`;
   const res = await fetch(url, {
     headers: { "X-CMC_PRO_API_KEY": key, Accept: "application/json" },
     signal: AbortSignal.timeout(8000),

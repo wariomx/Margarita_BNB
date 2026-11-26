@@ -112,6 +112,24 @@ export function toFriendlyError(err: unknown, unit = "tBNB"): FriendlyError {
             body: `Your wallet rejected the ${unit} transfer. Try from a regular wallet.`,
             code,
           };
+        case "QuoteExpired":
+          return { title: "The price quote expired", body: "Quotes last 2 minutes. Swap again to get a fresh CoinMarketCap price.", code };
+        case "NonceUsed":
+          return { title: "That quote was already used", body: "Each quote works once. Swap again to get a new one.", code };
+        case "TokenDisabled":
+          return { title: "That prize is closed", body: "Pick another prize; this token isn’t offered right now.", code };
+        case "InsufficientVault":
+          return { title: "The vault is out of that prize", body: "Pick another prize or a smaller amount.", code };
+        case "ZeroAmount":
+        case "ZeroPayout":
+          return { title: "Amount too small", body: "Swap at least one token.", code };
+        case "BadPrice":
+          return { title: "Price unavailable", body: "CoinMarketCap returned no usable price. Try again in a minute.", code };
+        case "BadSignature":
+        case "ECDSAInvalidSignature":
+        case "ECDSAInvalidSignatureLength":
+        case "ECDSAInvalidSignatureS":
+          return { title: "The price quote didn’t check out", body: "The vault only accepts quotes signed by the Margarita price service. Try again.", code };
       }
       return { title: "The contract rejected this", body: "Nothing changed.", code };
     }

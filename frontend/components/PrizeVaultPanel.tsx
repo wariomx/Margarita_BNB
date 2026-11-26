@@ -9,6 +9,7 @@ import { useAnyTx } from "@/hooks/useAnyTx";
 import { phaseLabel } from "@/hooks/useContractTx";
 import { CHAIN, GAME, TIERS, margaritaAbi, txUrl, type TierId } from "@/lib/contract";
 import { PRIZES, VAULT_TIERS, vaultAddress } from "@/lib/prizes";
+import { PrizeCoin } from "./PrizeCoin";
 import { vaultAbi } from "@/lib/vaultAbi";
 
 type QuoteResponse = {
@@ -137,6 +138,10 @@ export function PrizeVaultPanel({ balances }: { balances: Record<TierId, number>
       )}
 
       {owned.length > 0 ? (
+        <div className="grid items-center gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
+        <div className="flex justify-center">
+          <PrizeCoin token={prizeKey} size={168} label={`${prize?.symbol ?? "Prize"} coin, spinning`} />
+        </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
           <dt className="font-semibold text-muted">Value</dt>
           <dd className="num text-right">{valueUsd !== undefined ? usd(valueUsd) : "…"}</dd>
@@ -145,6 +150,7 @@ export function PrizeVaultPanel({ balances }: { balances: Record<TierId, number>
           <dt className="font-semibold text-muted">You receive</dt>
           <dd className="num text-right text-lg">{payout !== undefined ? `${payout.toFixed(4)} ${prize?.symbol}` : "…"}</dd>
         </dl>
+        </div>
       ) : null}
 
       {quote.data ? (

@@ -19,12 +19,43 @@ Tokens age into rarer tiers, and an Extra Añejo can be redeemed for a bottle fr
 - **Redeem:** burn 1 Extra Añejo for a bottle. Shipping is handled off-chain.
 - **Bottle cap:** at most 100 Extra Añejo can ever exist, one per bottle. Once they're all out, the barrel is sold out.
 
+## Prize vault: tequila for tokenized stocks
+
+Swap Blanco, Reposado or Añejo for test tokenized stocks at a live CoinMarketCap price.
+Extra Añejo can't be swapped; it stays the bottle prize.
+
+**Vault:** [`0xa1a3F6cd5b5a5d5068E41956f65B1BaF66BFc3E4`](https://testnet.bscscan.com/address/0xa1a3f6cd5b5a5d5068e41956f65b1baf66bfc3e4) (verified)
+
+| Token | Address |
+|---|---|
+| mNVDAx | [`0x1813958B46562cE3285DBc8d3eED5C06d2e3999e`](https://testnet.bscscan.com/address/0x1813958b46562ce3285dbc8d3eed5c06d2e3999e) |
+| mTSLAx | [`0xDf79c733bab1Fc6889b1Fc8ca894791C7C173CD0`](https://testnet.bscscan.com/address/0xdf79c733bab1fc6889b1fc8ca894791c7c173cd0) |
+| mAAPLx | [`0xf26c1AACb238b4b68B9cf61a97d0303fe2E5b55C`](https://testnet.bscscan.com/address/0xf26c1aacb238b4b68b9cf61a97d0303fe2e5b55c) |
+| mCAKE | [`0x2A12232C05466B06d0B0536FdfB10EE575ed3591`](https://testnet.bscscan.com/address/0x2a12232c05466b06d0b0536fdfb10ee575ed3591) |
+
+These are testnet stand-ins for real tokenized stocks, with 18 decimals. The vault holds 1,000,000 of each.
+
+- **Tier values:** Blanco $1, Reposado $5, Añejo $20. The owner can change them.
+- **Price:** the server reads CoinMarketCap and signs an EIP-712 `Quote(address token,uint256 priceUsd,uint256 expiry,uint256 nonce)`.
+  The domain is `MargaritaPrizeVault`, version `1`, chain 97. Quotes expire after 120 s, and each nonce works once.
+- **Claim:** call `setApprovalForAll(vault, true)` on the game once, then `claim(tier, amount, quote, sig)`.
+  Payout is `tierValue × amount ÷ price`, rounded down. Every `Claimed` event records the price used.
+- **Trust:** one server key signs prices, and the owner can pause, withdraw and change tier values.
+
+Deploy the vault and the 4 tokens:
+
+```sh
+forge script script/DeployVault.s.sol --rpc-url bsc_testnet --account <ACCOUNT> --sender <ADDRESS> \
+  --broadcast --with-gas-price 0.1gwei --priority-gas-price 0.1gwei
+```
+
 ## Safety
 
 - Rolls come only from the Chainlink coordinator set at deploy, so not even the owner can pick them.
 - If VRF stops answering, the owner can pause and cancel pulls older than 1 hour, and players claim their tBNB back.
 - Player funds waiting on a pull can't be withdrawn by the owner.
-- Reviewed with an AI auditor, not a professional audit. Testnet demo only.
+- The game was reviewed with an AI auditor. The vault had one quick independent manual review with forge proof-of-concept tests, which found no critical or high issues.
+- Neither contract is professionally audited. Treat them as unaudited hackathon code, for testnet only.
 
 ## Run it
 
