@@ -56,6 +56,13 @@
   #wallets .net-shot .frame__img { object-position: 50% 0; }
   #faq .faq-shot { display: block; width: min(100%, 360px); height: auto; outline: 1px solid var(--line); outline-offset: -1px; }
   @media (min-width: 640px) and (max-width: 1023px) { #play, #cellar { --h: 2 } }
+  .hero .hero-barrel { position: absolute; z-index: 1; touch-action: pan-y; }
+  .hero .hero-barrel > canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; opacity: 0; transition: opacity .6s ease; }
+  .hero .hero-barrel.is-live > canvas { opacity: 1; }
+  .hero .hero-barrel .loop-pause { right: 24%; bottom: 3%; }
+  .hero .hero__plate { opacity: 0; transition: opacity .6s ease; }
+  .hero .hero__plate.is-in { opacity: 1; }
+  .hero .wrap { position: relative; z-index: 2; }
   #odds .odds-barrel { --ratio: 80%; }
   #odds .odds-barrel .barrel-top__poster { object-fit: contain; }
   #odds .odds-barrel > canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: pan-y; }
@@ -123,6 +130,7 @@
 <main id="top">
   <section class="hero hero--photo" data-enter data-calm="left" aria-labelledby="hero-h">
     <img class="hero__bg" src="assets/img/hero-agave-1280.jpg" srcset="assets/img/hero-agave-500.jpg 500w, assets/img/hero-agave-960.jpg 960w, assets/img/hero-agave-1280.jpg 1280w, assets/img/hero-agave-1920.jpg 1920w, assets/img/hero-agave-2880.jpg 2880w" sizes="(max-width: 639px) 209vw, 100vw" width="1280" height="800" alt="The Margarita barrel-top, an oak barrel with iron hoops, standing on its point in a blue agave field at dusk" style="--ly-pos: 70% 50%; --ly-pos-phone: 70% 50%" fetchpriority="high" decoding="async" data-phone-fill data-source="commissioned" data-subject="key-art">
+    <div class="hero-barrel" data-barrel-top data-light="dusk" data-wood="reposado" data-defer data-anchor="0.665,0.865,0.56" data-plate="assets/img/hero-plate" aria-hidden="true"></div>
     <div class="wrap"><div class="hero-text">
       <div class="hero__text">
         <h1 id="hero-h">Margarita, an on-chain gacha game</h1>

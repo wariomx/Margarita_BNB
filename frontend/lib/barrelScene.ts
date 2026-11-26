@@ -88,12 +88,14 @@ export async function createBarrelScene(
   width: number,
   height: number,
   modelUrl = MODEL_URL,
+  light: "studio" | "dusk" = "studio",
 ): Promise<BarrelScene> {
+  const dusk = light === "dusk";
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.setSize(width, height, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = dusk ? 0.9 : 1.05;
   let shaderFailed = false;
   renderer.debug.onShaderError = () => {
     shaderFailed = true;
@@ -104,12 +106,14 @@ export async function createBarrelScene(
   camera.position.set(0, 0.74, 2.1);
   camera.lookAt(0, 0.49, 0);
 
-  scene.add(new THREE.HemisphereLight("#fff4e0", "#5a4a3a", 1.4));
-  const key = new THREE.DirectionalLight("#ffffff", 2.6);
-  key.position.set(1.4, 2.2, 1.6);
+  scene.add(dusk ? new THREE.HemisphereLight("#5a6fae", "#7a3b1c", 1.1) : new THREE.HemisphereLight("#fff4e0", "#5a4a3a", 1.4));
+  const key = dusk ? new THREE.DirectionalLight("#ffb466", 3.4) : new THREE.DirectionalLight("#ffffff", 2.6);
+  if (dusk) key.position.set(2.6, 0.7, -0.6);
+  else key.position.set(1.4, 2.2, 1.6);
   scene.add(key);
-  const rim = new THREE.DirectionalLight("#cfe0ff", 1.4);
-  rim.position.set(-1.8, 1.0, -1.4);
+  const rim = dusk ? new THREE.DirectionalLight("#8fa4e0", 0.9) : new THREE.DirectionalLight("#cfe0ff", 1.4);
+  if (dusk) rim.position.set(-1.6, 1.6, 1.4);
+  else rim.position.set(-1.8, 1.0, -1.4);
   scene.add(rim);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -118,7 +122,7 @@ export async function createBarrelScene(
   room.dispose();
   pmrem.dispose();
   scene.environment = envTarget.texture;
-  scene.environmentIntensity = 0.85;
+  scene.environmentIntensity = dusk ? 0.3 : 0.85;
 
   const pivot = new THREE.Group();
   const spinner = new THREE.Group();

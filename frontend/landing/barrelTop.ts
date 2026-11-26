@@ -13,6 +13,54 @@ function webglOk() {
   }
 }
 
+function idle() {
+  return new Promise<void>((resolve) => {
+    const go = () => ("requestIdleCallback" in window ? requestIdleCallback(() => resolve(), { timeout: 2000 }) : setTimeout(resolve, 300));
+    if (document.readyState === "complete") go();
+    else window.addEventListener("load", go, { once: true });
+  });
+}
+
+function anchor(host: HTMLElement, img: HTMLImageElement) {
+  const [ax, ay, span] = (host.dataset.anchor ?? "").split(",").map(Number);
+  const place = () => {
+    const nw = img.naturalWidth, nh = img.naturalHeight;
+    if (!nw || !nh) return;
+    const r = img.getBoundingClientRect();
+    const box = (host.offsetParent as HTMLElement | null)?.getBoundingClientRect() ?? r;
+    const sc = Math.max(r.width / nw, r.height / nh);
+    const [px, py] = getComputedStyle(img).objectPosition.split(" ").map(parseFloat);
+    const ox = ((r.width - nw * sc) * px) / 100;
+    const oy = ((r.height - nh * sc) * py) / 100;
+    const size = (span * nh * sc) / 0.725;
+    host.style.width = `${size}px`;
+    host.style.height = `${size}px`;
+    host.style.left = `${r.left - box.left + ox + ax * nw * sc - size / 2}px`;
+    host.style.top = `${r.top - box.top + oy + ay * nh * sc - size * 0.915}px`;
+  };
+  if (img.complete) place();
+  else img.addEventListener("load", place, { once: true });
+  new ResizeObserver(place).observe(img);
+}
+
+function plateIn(host: HTMLElement, bg: HTMLImageElement) {
+  const stem = host.dataset.plate;
+  if (!stem) return;
+  const plate = bg.cloneNode() as HTMLImageElement;
+  const from = bg.currentSrc.match(/[^/]*-\d+\.jpg$/)?.[0]?.replace(/-\d+\.jpg$/, "") ?? "";
+  if (!from) return;
+  const swap = (v: string | null) => v && v.split(from).join(stem.split("/").pop()!);
+  plate.removeAttribute("fetchpriority");
+  plate.setAttribute("srcset", swap(bg.getAttribute("srcset")) ?? "");
+  plate.src = swap(bg.getAttribute("src")) ?? "";
+  plate.alt = "";
+  plate.classList.add("hero__plate");
+  plate.decode().then(() => {
+    bg.after(plate);
+    requestAnimationFrame(() => plate.classList.add("is-in"));
+  }).catch(() => {});
+}
+
 function mount(host: HTMLElement) {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
   let scene: BarrelScene | undefined;
@@ -46,9 +94,13 @@ function mount(host: HTMLElement) {
   let loading = false;
   let woods: typeof import("../lib/barrelScene").TIER_WOOD | undefined;
 
+  const heroBg = host.dataset.anchor ? host.parentElement?.querySelector<HTMLImageElement>(".hero__bg") ?? undefined : undefined;
+  if (heroBg) anchor(host, heroBg);
+
   async function start() {
     if (scene || loading || reduce.matches || !webglOk()) return;
     loading = true;
+    if (host.dataset.defer !== undefined) await idle();
     const mod = await loadScene().catch(() => undefined);
     if (!mod || scene || reduce.matches) {
       loading = false;
@@ -62,7 +114,7 @@ function mount(host: HTMLElement) {
     const { width, height } = host.getBoundingClientRect();
     let made: BarrelScene;
     try {
-      made = await mod.createBarrelScene(canvas, Math.max(1, width), Math.max(1, height));
+      made = await mod.createBarrelScene(canvas, Math.max(1, width), Math.max(1, height), undefined, host.dataset.light === "dusk" ? "dusk" : "studio");
     } catch {
       canvas.remove();
       canvas = undefined;
@@ -71,6 +123,7 @@ function mount(host: HTMLElement) {
     }
     loading = false;
     scene = made;
+    if (heroBg) plateIn(host, heroBg);
     scene.setWood(woods[wood], true);
     scene.play();
     sync();
