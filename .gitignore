@@ -1,0 +1,9 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+node_modules/
+.playwright-mcp/
+.taste-skill/
+.hallmark/
+.solidity-auditor/

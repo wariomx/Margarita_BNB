@@ -1,0 +1,572 @@
+const BASE = new URL('./', import.meta.url);
+const reducedQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+export const reduced = () => !!(reducedQuery && reducedQuery.matches);
+export const isStill = el => !!(el && el.closest && el.closest('[data-ui-still]'));
+
+const css = new Map();
+function link(href) {
+  if (!css.has(href)) {
+    const done = [...document.querySelectorAll('link[rel="stylesheet"]')].some(l => l.href === href);
+    css.set(href, done ? Promise.resolve() : new Promise(res => {
+      const l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = href;
+      l.onload = l.onerror = () => res();
+      document.head.appendChild(l);
+    }));
+  }
+  return css.get(href);
+}
+const cache = new Map();
+const fetchText = url => {
+  if (!cache.has(url)) cache.set(url, fetch(url).then(r => { if (!r.ok) throw new Error(`ui: ${r.status} ${url}`); return r.text(); }));
+  return cache.get(url);
+};
+
+let uid = 0;
+function uniqueIds(root) {
+  const n = ++uid;
+  for (const el of root.querySelectorAll('[id]')) {
+    const old = el.id, id = `${old}-u${n}`;
+    el.id = id;
+    for (const ref of root.querySelectorAll('*')) {
+      for (const a of ['fill', 'stroke', 'mask', 'clip-path', 'filter', 'href', 'xlink:href']) {
+        const v = ref.getAttribute(a);
+        if (!v || !v.includes('#' + old)) continue;
+        const nv = v.split(`url(#${old})`).join(`url(#${id})`);
+        ref.setAttribute(a, nv === '#' + old ? '#' + id : nv);
+      }
+    }
+  }
+}
+
+const mods = new Map();
+function script(name) {
+  if (!mods.has(name)) mods.set(name, import(new URL(`${name}/fragment.js`, BASE).href).then(m => m.default));
+  return mods.get(name);
+}
+
+export async function load(el, name, opts = {}) {
+  if (!/^[a-z0-9-]+$/.test(name)) throw new Error(`ui: bad fragment name "${name}"`);
+  const base = new URL(`${name}/`, BASE);
+  const [meta, html] = await Promise.all([
+    fetchText(new URL('meta.json', base).href).then(JSON.parse),
+    fetchText(new URL('fragment.html', base).href),
+    link(new URL('base.css', BASE).href),
+    link(new URL('fragment.css', base).href),
+  ]);
+  el.innerHTML = html.replace(/src="(?:assets\/ui\/)?icons\//g, `src="${new URL('icons/', BASE).href}`);
+  const root = el.querySelector('[data-ui]') || el.firstElementChild;
+  uniqueIds(root);
+  return meta.js ? start(root, opts) : null;
+}
+
+export async function start(root, opts) {
+  if (root.__ui) return root.__ui;
+  const name = root.dataset.ui;
+  if (!/^[a-z0-9-]+$/.test(name || '')) return null;
+  if (!opts) { try { opts = root.dataset.uiOpts ? JSON.parse(root.dataset.uiOpts) : {}; } catch { opts = {}; } }
+  await Promise.all([link(new URL('base.css', BASE).href), link(new URL(`${name}/fragment.css`, BASE).href)]);
+  const init = await script(name).catch(() => null);
+  if (!init) return null;
+  root.__ui = init(root, opts) || { destroy() {} };
+  return root.__ui;
+}
+
+const LOOPS = '[data-ui-loop], [data-ui-cycles]';
+export function plan(root = document) {
+  const doc = root.ownerDocument || root;
+  if (!doc.querySelector || !doc.querySelector('[data-ui-loop]')) return;
+  const kind = doc.querySelector('meta[name="site-kind"]');
+  const other = (doc.documentElement && doc.documentElement.dataset.type === 'place') || (!!kind && kind.content.trim().toLowerCase() === 'other');
+  const phone = other || (typeof matchMedia === 'function' && matchMedia('(max-width: 639px)').matches);
+  for (const el of root.querySelectorAll('[data-ui-load], [data-ui]')) {
+    if (el.parentElement && el.parentElement.closest('[data-ui-load]')) continue;
+    if (phone || !el.closest(LOOPS)) el.setAttribute('data-ui-still', '');
+  }
+}
+
+export function loadAll(root = document) {
+  plan(root);
+  return Promise.all([...root.querySelectorAll('[data-ui-load]')].map(el => {
+    let opts = {};
+    try { opts = el.dataset.uiOpts ? JSON.parse(el.dataset.uiOpts) : {}; } catch (e) { console.warn('ui: bad data-ui-opts', el); }
+    return load(el, el.dataset.uiLoad, opts).catch(e => { console.warn(e); return null; });
+  }));
+}
+export function startAll(root = document) {
+  plan(root);
+  return Promise.all([...root.querySelectorAll('[data-ui]')].map(el => start(el)));
+}
+
+export function hold(el) {
+  el.setAttribute('data-ui-still', '');
+  const root = el.matches('[data-ui]') ? el : el.querySelector('[data-ui]');
+  if (!root || !root.__ui) return;
+  if (root.__ui.hold) root.__ui.hold();
+  else { root.__ui.destroy(); root.__ui = null; }
+}
+
+const ICON_PAUSE = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4.25" y="3.25" width="2.75" height="9.5" rx="0.9"/><rect x="9" y="3.25" width="2.75" height="9.5" rx="0.9"/></svg>';
+const ICON_PLAY = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.25 3.7v8.6c0 .62.68 1 1.2.66l6.5-4.3c.47-.31.47-1 0-1.32l-6.5-4.3c-.52-.34-1.2.04-1.2.66Z"/></svg>';
+const boxes = new WeakMap();
+const boxOf = root => root.closest('[data-ui-pause-host], .panel__screen, .panel, .frame') || root.parentElement;
+const titleOf = card => [...card.querySelectorAll('h3, .card__title')].find(t => !t.closest('.panel, .frame, .ui') && t.closest('.card') === card);
+
+export function pausable(box, ctl) {
+  if (!box || reduced()) return () => {};
+  const explicit = box.matches('[data-ui-pause-host]');
+  const card = explicit ? null : box.closest('.card');
+  const title = card ? titleOf(card) : null;
+  const key = title ? card : box;
+  let p = boxes.get(key);
+  if (!p) {
+    if (box.querySelector(':scope > .loop-pause') || (title && card.querySelector(':scope > .loop-pause'))) return () => {};
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ui-pause loop-pause';
+    p = { btn, ctls: new Set(), paused: false, off: () => {} };
+    const show = () => {
+      const label = `${p.paused ? 'Play' : 'Pause'} animation`;
+      btn.innerHTML = p.paused ? ICON_PLAY : ICON_PAUSE;
+      btn.setAttribute('aria-label', label);
+      btn.title = label;
+      btn.classList.toggle('is-paused', p.paused);
+    };
+    btn.addEventListener('click', () => { p.paused = !p.paused; show(); p.ctls.forEach(c => (p.paused ? c.pause() : c.resume())); });
+    show();
+    if (title) {
+      title.classList.add('ui-pause-beside');
+      btn.classList.add('ui-pause--title');
+      const place = () => {
+        const c = card.getBoundingClientRect(), t = title.getBoundingClientRect(), col = title.parentElement;
+        const cs = getComputedStyle(col), r = col.getBoundingClientRect();
+        const colRight = r.right - (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+        const lh = parseFloat(getComputedStyle(title).lineHeight) || 26;
+        const k = c.width / (card.offsetWidth || c.width) || 1;
+        btn.style.top = `${Math.round((t.top - c.top) / k + (lh - 32) / 2)}px`;
+        btn.style.right = `${Math.max(8, Math.round((c.right - colRight) / k))}px`;
+      };
+      if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+      card.append(btn);
+      place();
+      const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(place) : null;
+      if (ro) { ro.observe(card); ro.observe(title); }
+      p.off = () => { if (ro) ro.disconnect(); };
+    } else {
+      const bare = !explicit && !box.matches('.panel__screen, .panel, .frame');
+      if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+      if (bare) {
+        btn.classList.add('ui-pause--below');
+        if (!box.dataset.uiPauseRoom) { box.dataset.uiPauseRoom = ''; box.style.paddingBottom = `calc(${getComputedStyle(box).paddingBottom} + 44px)`; }
+      }
+      box.append(btn);
+    }
+    boxes.set(key, p);
+  }
+  p.ctls.add(ctl);
+  if (p.paused) ctl.pause();
+  return () => { p.ctls.delete(ctl); if (!p.ctls.size) { p.btn.remove(); p.off(); boxes.delete(key); } };
+}
+const addPause = (root, ctl) => pausable(boxOf(root), ctl);
+
+const tidying = new WeakMap();
+function sweep(root) {
+  const walk = (el, up) => {
+    if (typeof SVGElement === 'function' && el instanceof SVGElement) return;
+    const cs = getComputedStyle(el);
+    const self = cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) < 0.05;
+    if (self && !up && cs.display !== 'none' && el.textContent.trim()) {
+      if (!el.hasAttribute('aria-hidden')) { el.setAttribute('aria-hidden', 'true'); el.dataset.uiAh = ''; }
+    } else if (el.dataset.uiAh != null && !(self && !up)) { el.removeAttribute('aria-hidden'); delete el.dataset.uiAh; }
+    for (const c of el.children) walk(c, up || self);
+  };
+  for (const c of root.children) walk(c, false);
+}
+function tidy(root) {
+  if (tidying.has(root)) return;
+  tidying.set(root, requestAnimationFrame(() => requestAnimationFrame(() => { tidying.delete(root); if (root.isConnected) sweep(root); })));
+}
+function untidy(root) {
+  if (tidying.has(root)) { cancelAnimationFrame(tidying.get(root)); tidying.delete(root); }
+  for (const el of root.querySelectorAll('[data-ui-ah]')) { el.removeAttribute('aria-hidden'); delete el.dataset.uiAh; }
+}
+
+const STOP = Symbol('stop'), AGAIN = Symbol('again');
+const hostOf = root => root.closest('[data-ui-hover], .card, .tile, .menu-card, a') || boxOf(root);
+const hosted = new WeakMap();
+const QUARTER = 800;
+
+function hostListen(host, rec) {
+  let set = hosted.get(host);
+  if (!set) {
+    set = new Set();
+    hosted.set(host, set);
+    const enter = pointer => {
+      const live = [...set].filter(r => r.running());
+      if (live.length) { live.forEach(r => r.restart()); return; }
+      const top = [...set].sort((a, b) => (a.root.compareDocumentPosition(b.root) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)).pop();
+      if (top) (pointer ? top.hover(true) : top.restart());
+    };
+    const leave = () => set.forEach(r => r.hover(false));
+    host.addEventListener('pointerenter', e => { if (e.pointerType !== 'touch') enter(true); });
+    host.addEventListener('pointerleave', leave);
+    host.addEventListener('focusin', e => { if (!e.target.closest('.loop-pause')) enter(false); });
+    host.addEventListener('focusout', e => { if (!host.contains(e.relatedTarget)) leave(); });
+  }
+  set.add(rec);
+  return () => set.delete(rec);
+}
+
+export function loop(root, cycle, { still, rest = 600, rootMargin = '0px', cycles, pause = true } = {}) {
+  const show = () => { if (still) still(); tidy(root); };
+  const setHeld = on => root.classList.toggle('is-ui-held', on);
+  if (reduced()) {
+    setHeld(true);
+    show();
+    const none = () => {};
+    return { destroy: none, pause: none, resume: none, restart: none, hold: none };
+  }
+  const cyclesHost = root.closest('[data-ui-cycles]');
+  const maxCycles = cycles || (cyclesHost ? Math.max(1, parseInt(cyclesHost.dataset.uiCycles, 10) || 2) : 0);
+  let mode = isStill(root) ? 'held' : 'run';
+  let want = mode === 'run' ? Infinity : 0;
+  let needRest = mode === 'run' && rest > 0;
+  let visible = false, stopped = false, paused = false, hovering = false, unpause = null;
+  let gen = 0, cur = 0, began = 0, played = 0;
+  let stalled = false, warned = false;
+  const queue = [], aborts = new Set(), wake = [];
+  const active = () => visible && !paused && !document.hidden && !stopped;
+  const flush = () => { if (!active()) return; while (queue.length) queue.shift()(); };
+  const abort = why => { gen++; const fs = [...aborts]; aborts.clear(); queue.length = 0; fs.forEach(f => f(why)); };
+  const kick = () => { while (wake.length) wake.shift()(); };
+  let t0 = 0, planned = 0, lost = 0;
+  const LAG = 1200;
+  const gate = () => new Promise((res, rej) => {
+    if (stopped) return rej(STOP);
+    if (cur !== gen) return rej(AGAIN);
+    if (active()) return res();
+    stalled = true;
+    const from = performance.now();
+    const ab = why => rej(why);
+    aborts.add(ab);
+    queue.push(() => { aborts.delete(ab); lost += performance.now() - from; res(); });
+  });
+  const sleep = ms => new Promise((res, rej) => {
+    const ab = why => { clearTimeout(t); rej(why); };
+    const t = setTimeout(() => { aborts.delete(ab); res(); }, ms);
+    aborts.add(ab);
+  });
+  const frame = () => new Promise((res, rej) => {
+    let done = false, t = 0;
+    const go = () => { if (done) return; done = true; clearTimeout(t); aborts.delete(ab); res(); };
+    const ab = why => { done = true; clearTimeout(t); rej(why); };
+    aborts.add(ab);
+    t = setTimeout(go, 50);
+    requestAnimationFrame(go);
+  });
+  const api = {
+    get alive() { return !stopped; },
+    get time() { return began ? performance.now() - t0 - lost : 0; },
+    async wait(ms) {
+      await gate();
+      if (!began) { await sleep(ms); await gate(); return; }
+      planned += ms;
+      const due = t0 + planned + lost - performance.now();
+      if (due < -LAG) { lost -= due; await frame(); }
+      else if (due > 1) await sleep(due);
+      else await frame();
+      await gate();
+    },
+    async tween(ms, fn, ease = t => 1 - Math.pow(1 - t, 3)) {
+      await gate();
+      if (began) planned += ms;
+      await new Promise((res, rej) => {
+        let done = 0, last = null, dead = false;
+        const ab = why => { dead = true; rej(why); };
+        aborts.add(ab);
+        const step = now => {
+          if (dead) return;
+          if (!active()) { last = null; gate().then(() => requestAnimationFrame(step), e => { aborts.delete(ab); rej(e); }); return; }
+          if (last != null) done += now - last;
+          last = now;
+          const k = Math.min(1, done / ms);
+          fn(ease(k));
+          if (k < 1) requestAnimationFrame(step); else { aborts.delete(ab); res(); }
+        };
+        requestAnimationFrame(step);
+      });
+      await gate();
+    },
+  };
+  const io = new IntersectionObserver(es => {
+    const was = visible;
+    visible = es[es.length - 1].isIntersecting;
+    if (was && !visible && began && !paused) { abort(AGAIN); began = 0; show(); if (mode === 'run' && rest > 0) needRest = true; }
+    flush();
+  }, { rootMargin });
+  io.observe(root);
+  const onVis = () => flush();
+  document.addEventListener('visibilitychange', onVis);
+  const inner = on => root.querySelectorAll('[data-fx-mounted]').forEach(el => { try { on ? el.__fx?.resume() : el.__fx?.pause(); } catch {} });
+  const ctl = {
+    pause() { paused = true; if (began) { abort(AGAIN); began = 0; show(); if (mode === 'run' && rest > 0) needRest = true; } root.classList.add('is-ui-paused'); inner(false); root.dispatchEvent(new CustomEvent('ui-pause', { detail: { paused: true } })); },
+    resume() { paused = false; root.classList.remove('is-ui-paused'); inner(true); root.dispatchEvent(new CustomEvent('ui-pause', { detail: { paused: false } })); flush(); },
+    restart() {
+      if (stopped || paused) return;
+      if (want > 0 && began && performance.now() - began < QUARTER) return;
+      abort(AGAIN);
+      needRest = false;
+      began = 0;
+      show();
+      if (mode === 'held') want = Math.max(want, 1);
+      kick();
+    },
+    hold() {
+      if (stopped) return;
+      mode = 'held'; want = 0; hovering = false;
+      if (unpause) { unpause(); unpause = null; }
+      abort(AGAIN);
+      show();
+      setHeld(true);
+    },
+    destroy() {
+      if (stopped) return;
+      stopped = true;
+      io.disconnect();
+      document.removeEventListener('visibilitychange', onVis);
+      abort(STOP);
+      kick();
+      unlisten();
+      if (unpause) unpause();
+      root.classList.remove('is-ui-paused');
+      setHeld(true);
+      show();
+    },
+  };
+  const rec = {
+    root,
+    running: () => !stopped && mode === 'run',
+    restart: () => ctl.restart(),
+    hover(on) {
+      if (stopped || mode !== 'held') return;
+      hovering = on && !paused;
+      if (hovering && want <= 0) { want = 1; kick(); }
+      // leaving: the cycle under way plays to its end and rests on the finished picture
+    },
+  };
+  const unlisten = hostListen(hostOf(root), rec);
+  setHeld(mode === 'held');
+  show();
+  (async () => {
+    for (;;) {
+      if (stopped) return;
+      if (want <= 0) { setHeld(true); await new Promise(r => wake.push(r)); continue; }
+      cur = gen;
+      setHeld(false);
+      try {
+        await gate();
+        if (needRest) { await api.wait(rest); needRest = false; }
+        if (mode === 'run' && pause && !maxCycles && !unpause) unpause = addPause(root, ctl);
+        began = performance.now();
+        t0 = began; planned = 0; lost = 0;
+        untidy(root);
+        stalled = false;
+        root.dispatchEvent(new CustomEvent('ui-cycle', { bubbles: true, detail: { held: mode === 'held' } }));
+        await cycle(api);
+        const len = performance.now() - began;
+        root.dispatchEvent(new CustomEvent('ui-cycle-end', { bubbles: true, detail: { ms: Math.round(len), planned: Math.round(planned), stalled } }));
+        if (!warned && !stalled && (planned < 2400 || planned > 4000 || len > 4400)) {
+          warned = true;
+          console.warn(`ui.js: a cycle planned at ${(planned / 1000).toFixed(2)} s and run in ${(len / 1000).toFixed(2)} s (keep one cycle 2.5 to 4 s)`, root);
+        }
+        began = 0;
+        want--;
+        if (mode === 'run' && maxCycles && ++played >= maxCycles) { mode = 'held'; want = 0; }
+        if (mode === 'held' && hovering) want = Math.max(want, 1);
+        if (want <= 0) show();
+      } catch (e) {
+        began = 0;
+        if (e === STOP) return;
+        if (e !== AGAIN) { console.error(e); return; }
+      }
+    }
+  })();
+  return ctl;
+}
+
+export function restart(el = document) {
+  const roots = el.matches && el.matches('[data-ui]') ? [el] : [...el.querySelectorAll('[data-ui]')];
+  for (const r of roots) { try { r.__ui?.restart?.(); } catch (e) { console.warn(e); } }
+}
+
+const grounded = new WeakMap();
+const bakeQueue = [];
+let bakeBusy = null;
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+const parseJSON = s => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
+const isLive = el => !reduced() && (el.hasAttribute('data-fx-live') ||
+  [...el.querySelectorAll('[data-ui-opts]')].some(f => /"drive"/.test(f.dataset.uiOpts || '') && !f.closest('[data-ui-still]')));
+async function mountAt(fx, el, spec, dpr) {
+  await fx.load(el.dataset.fx);
+  const cfg = fx.config, keep = cfg ? cfg.maxDpr : null;
+  if (cfg) cfg.maxDpr = dpr;
+  try { return await fx.mount(el, el.dataset.fx, spec); } finally { if (cfg) cfg.maxDpr = keep; }
+}
+const bakeDpr = () => Math.min(2, Math.max(1, (typeof devicePixelRatio === 'number' && devicePixelRatio) || 1));
+
+function groundSpec(el, fx, extra) {
+  let palette = fx.readPalette(el);
+  const over = parseJSON(el.dataset.fxPalette);
+  if (over) palette = fx.normalizePalette({ ...palette, ...over });
+  if (!el.dataset.fxSeed) el.dataset.fxSeed = String(Math.floor(Math.random() * 10000));
+  return { palette, params: { ...(parseJSON(el.dataset.fxParams) || {}), ...(extra || {}) }, seed: el.dataset.fxSeed };
+}
+function unground(el) { if (el.__fx) { try { el.__fx.destroy(); } catch { /* gone */ } } }
+
+async function bakeOne(el, fx, st) {
+  st.queued = false;
+  if (!el.isConnected || !st.near || !st.dirty) return;
+  const gen = ++st.gen;
+  unground(el);
+  const cfg = fx.config, adaptive = cfg ? cfg.adaptive : undefined;
+  if (cfg) cfg.adaptive = false;
+  try { await bakeDraw(el, fx, st, gen); } finally { if (cfg) cfg.adaptive = adaptive; }
+}
+function stand(el, fx) {
+  if (el.style.background || !fx.fallbackCSS) return;
+  try { el.style.background = fx.fallbackCSS(groundSpec(el, fx).palette); el.dataset.uiStandIn = ''; } catch { /* the panel's own fill stays */ }
+}
+async function bakeDraw(el, fx, st, gen) {
+  let api;
+  try { api = await mountAt(fx, el, groundSpec(el, fx), st.tries ? 1 : bakeDpr()); } catch (e) { console.warn('ui: ground', e); stand(el, fx); st.dirty = false; return; }
+  let src = null;
+  for (const t0 = performance.now(); performance.now() - t0 < 10000;) {
+    if (el.__fx !== api) return;
+    if (gen !== st.gen || !st.near) { api.destroy(); if (st.near) queueBake(el, fx, st); return; }
+    if (el.dataset.fxFallback) { st.dirty = false; return; }
+    const c = el.querySelector(':scope > canvas.fx-canvas:not(.is-baked)');
+    if (c && c.style.opacity === '1') { src = c; break; }
+    await nextFrame();
+  }
+  if (!src) {
+    api.destroy(); stand(el, fx);
+    if (!st.tries) { st.tries = 1; setTimeout(() => { if (st.near && st.dirty) queueBake(el, fx, st); }, 1200); }
+    return;
+  }
+  api.set({});
+  const out = document.createElement('canvas');
+  out.width = src.width; out.height = src.height;
+  out.getContext('2d').drawImage(src, 0, 0);
+  out.className = 'fx-canvas is-baked';
+  out.setAttribute('aria-hidden', 'true');
+  Object.assign(out.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', display: 'block', zIndex: '-1', pointerEvents: 'none', borderRadius: 'inherit' });
+  api.destroy();
+  el.insertBefore(out, el.firstChild);
+  if (el.dataset.uiStandIn != null) { el.style.background = ''; delete el.dataset.uiStandIn; }
+  const id = el.dataset.fx;
+  const stub = {
+    id, el, baked: true, params: api.params, palette: api.palette, seed: api.seed,
+    pause() {}, resume() {}, set() { return stub; }, setPalette() { return stub; },
+    destroy() { out.remove(); if (el.__fx === stub) delete el.__fx; el.removeAttribute('data-fx-mounted'); },
+    get info() { return { webgl: 0, baked: true, size: [out.width, out.height] }; },
+  };
+  el.__fx = stub;
+  el.setAttribute('data-fx-mounted', id);
+  st.size = [el.clientWidth, el.clientHeight];
+  st.dirty = false;
+}
+function nextBake() {
+  const vh = innerHeight;
+  let best = 0, bd = Infinity;
+  bakeQueue.forEach(([el], i) => {
+    const r = el.getBoundingClientRect();
+    const d = r.bottom > 0 && r.top < vh ? Math.max(0, r.top) - 1e6 : r.top >= vh ? r.top - vh : -r.bottom;
+    if (d < bd) { bd = d; best = i; }
+  });
+  return bakeQueue.splice(best, 1)[0];
+}
+function pump() {
+  if (!bakeBusy) bakeBusy = (async () => {
+    await null;
+    while (bakeQueue.length) {
+      const [el, fx, st] = nextBake();
+      try { await bakeOne(el, fx, st); } catch (e) { console.warn('ui: ground', e); }
+      await nextFrame();
+    }
+    bakeBusy = null;
+  })();
+  return bakeBusy;
+}
+function queueBake(el, fx, st) {
+  if (st.queued || !st.dirty) return;
+  st.queued = true;
+  bakeQueue.push([el, fx, st]);
+  pump();
+}
+async function liveOn(el, fx, st) {
+  if (el.__fx && !el.__fx.baked) return;
+  const gen = ++st.gen;
+  unground(el);
+  const api = await mountAt(fx, el, groundSpec(el, fx, st.extra), 1).catch(e => { console.warn('ui: ground', e); return null; });
+  if (!api) return;
+  if (gen !== st.gen || !st.near) { api.destroy(); return; }
+  api.pause();
+  const set = api.set;
+  api.set = next => { st.extra = { ...st.extra, ...next }; return set(next); };
+}
+
+const groundWaiters = [];
+const groundIO = typeof IntersectionObserver === 'function' ? new IntersectionObserver(es => {
+  for (const e of es) {
+    const st = grounded.get(e.target);
+    if (!st) continue;
+    st.near = e.isIntersecting;
+    if (st.live) {
+      if (st.near) liveOn(e.target, st.fx, st);
+      else { st.gen++; unground(e.target); }
+    } else if (st.near) queueBake(e.target, st.fx, st);
+  }
+  for (const r of groundWaiters.splice(0)) r();
+}, { rootMargin: '12% 0px' }) : null;
+const groundRO = typeof ResizeObserver === 'function' ? new ResizeObserver(es => {
+  for (const e of es) {
+    const st = grounded.get(e.target);
+    if (!st || st.live || !st.size) continue;
+    const w = e.target.clientWidth, h = e.target.clientHeight;
+    if (Math.abs(w - st.size[0]) < 2 && Math.abs(h - st.size[1]) < 2) continue;
+    clearTimeout(st.rt);
+    st.rt = setTimeout(() => { st.dirty = true; if (st.near) queueBake(e.target, st.fx, st); }, 250);
+  }
+}) : null;
+
+export async function grounds(root, fx, { skip } = {}) {
+  root = root || document;
+  if (fx.config) fx.config.maxLive = Math.min(fx.config.maxLive || 3, 3);
+  const els = [...root.querySelectorAll('[data-fx]')].filter(el => !(skip && skip(el)));
+  if (root.matches && root.matches('[data-fx]') && !(skip && skip(root))) els.unshift(root);
+  if (!groundIO) return fx.mountAll(root);
+  const seen = new Promise(r => groundWaiters.push(r));
+  for (const el of els) {
+    let st = grounded.get(el);
+    if (st) {
+      st.dirty = true; st.gen++;
+      if (st.live) { unground(el); if (st.near) liveOn(el, fx, st); }
+      else if (st.near) queueBake(el, fx, st);
+      continue;
+    }
+    st = { fx, live: isLive(el), near: false, dirty: true, queued: false, gen: 0, size: null, extra: null, tries: 0 };
+    grounded.set(el, st);
+    groundIO.observe(el);
+    if (groundRO) groundRO.observe(el);
+  }
+  await Promise.race([seen, new Promise(r => setTimeout(r, 300))]);
+  if (bakeBusy) await bakeBusy;
+}
+
+export const POINTER_SVG = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 2.8v13.4c0 .5.6.7.9.4l3.2-3.1 2.2 4.9c.1.3.5.4.8.3l1.6-.7c.3-.1.4-.5.3-.8l-2.2-4.8 4.4-.3c.5 0 .7-.6.3-.9L5.4 2.4c-.4-.3-.9 0-.9.4Z" fill="#111" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+
+export const withLoop = (ctl, destroy) => ({ pause: ctl.pause, resume: ctl.resume, restart: ctl.restart, hold: ctl.hold, destroy });
+
+const ui = { load, loadAll, start, startAll, plan, loop, restart, hold, pausable, grounds, isStill, reduced, POINTER_SVG };
+export default ui;

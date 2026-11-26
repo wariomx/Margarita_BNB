@@ -1,0 +1,36 @@
+{
+  "name": "margarita-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "abi:sync": "node scripts/sync-abi.mjs",
+    "typecheck": "next typegen && tsc --noEmit",
+    "build:landing": "rm -rf public/assets/barrel/js && esbuild landing/barrelTop.ts --bundle --splitting --minify --format=esm --target=es2020 --legal-comments=none --entry-names=[name] --chunk-names=[name] --outdir=public/assets/barrel/js",
+    "prebuild": "npm run build:landing"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.108.4",
+    "@types/three": "^0.187.0",
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "three": "^0.187.0",
+    "viem": "^2.58.7",
+    "wagmi": "^3.7.11"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "esbuild": "^0.28.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5"
+  }
+}

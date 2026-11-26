@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 88" role="img" aria-label="Margarita"><defs><clipPath id="b"><path d="M11 22 Q3.5 44 12 66 Q20.5 77.5 32 87 Q43.5 77.5 52 66 Q60.5 44 53 22 Z"/></clipPath></defs>
+<path d="M11 22 Q3.5 44 12 66 Q20.5 77.5 32 87 Q43.5 77.5 52 66 Q60.5 44 53 22 Z" fill="#d5a865"/><g clip-path="url(#b)">
+<path d="M32 0 H64 V88 H32 Z" fill="#a86a2a" opacity=".38"/>
+<g fill="none" stroke="#1f1a17" stroke-width=".9" opacity=".4"><path d="M21 22 Q14 48 28 87"/><path d="M43 22 Q50 48 36 87"/></g>
+<g fill="none" stroke="#1f1a17" stroke-width="2.6"><path d="M0 25 Q32 28.2 64 25"/><path d="M0 32.5 Q32 35.7 64 32.5"/><path d="M0 54 Q32 57.2 64 54"/><path d="M0 62 Q32 65.2 64 62"/></g></g>
+<path d="M11 22 Q3.5 44 12 66 Q20.5 77.5 32 87 Q43.5 77.5 52 66 Q60.5 44 53 22 Z" fill="none" stroke="#1f1a17" stroke-width="2.2" stroke-linejoin="round"/>
+<ellipse cx="32" cy="22" rx="21" ry="2.8" fill="#efe6d2" stroke="#1f1a17" stroke-width="2.2"/>
+<rect x="29.5" y="8" width="5" height="14" rx="1" fill="#1f1a17"/><circle cx="32" cy="5.6" r="4.6" fill="#1f1a17"/></svg>
